@@ -180,3 +180,60 @@ export async function cancelReservation(_prev: unknown, formData: FormData) {
   revalidatePath("/");
   return { success: true };
 }
+
+export async function providerCancelReservation(_prev: unknown, formData: FormData) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) return { error: "Not authenticated" };
+
+  const orgId = session.session.activeOrganizationId;
+  if (!orgId) return { error: "No organization" };
+
+  const reservationId = formData.get("reservationId") as string;
+  if (!reservationId) return { error: "Missing reservation id" };
+
+  const provider = await db.query.providers.findFirst({
+    where: eq(providers.orgId, orgId),
+  });
+  if (!provider) return { error: "Provider not found" };
+
+  // Join to verify this reservation belongs to a listing owned by this provider.
+  const row = await db
+    .select({ reservation: reservations, listing: listings })
+    .from(reservations)
+    .innerJoin(listings, eq(reservations.listingId, listings.id))
+    .where(
+      and(
+        eq(reservations.id, reservationId),
+        eq(listings.providerId, provider.id),
+        eq(reservations.status, "held")
+      )
+    )
+    .limit(1);
+
+  if (!row.length) return { error: "Reservation not found" };
+
+  const { reservation, listing } = row[0];
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(reservations)
+      .set({ status: "cancelled" })
+      .where(eq(reservations.id, reservationId));
+    await tx
+      .update(listings)
+      .set({
+        quantityAvailable: sql`${listings.quantityAvailable} + ${reservation.quantity}`,
+        status: "active",
+      })
+      .where(eq(listings.id, listing.id));
+  });
+
+  try {
+    await inngest.send({ name: "reservation/cancelled", data: { reservationId } });
+  } catch (e) {
+    console.error("[inngest] send failed", e);
+  }
+
+  revalidatePath("/provider/dashboard");
+  return { success: true };
+}

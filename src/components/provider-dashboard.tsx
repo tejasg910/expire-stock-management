@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { VerifyPickupForm } from "@/components/verify-pickup-form";
+import { CancelPickupButton } from "@/components/cancel-pickup-button";
 import { ListingActions } from "@/components/listing-actions";
+import { LocalTime } from "@/components/local-time";
 import { Package, Clock, TrendingUp, Plus } from "lucide-react";
 import type { InferSelectModel } from "drizzle-orm";
 import type { providers, listings, reservations } from "@/db/schema";
@@ -128,14 +130,13 @@ export function ProviderDashboard({
                     </p>
                   )}
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Window expires{" "}
-                    {new Date(reservation.holdExpiresAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    Window expires <LocalTime date={reservation.holdExpiresAt} />
                   </p>
                 </div>
-                <VerifyPickupForm reservationId={reservation.id} />
+                <div className="flex flex-col gap-2 items-end shrink-0">
+                  <VerifyPickupForm reservationId={reservation.id} />
+                  <CancelPickupButton reservationId={reservation.id} />
+                </div>
               </div>
             ))}
           </div>
@@ -173,11 +174,7 @@ export function ProviderDashboard({
                     ₹{Number(listing.currentPrice).toFixed(0)} · {listing.quantityAvailable} of {listing.quantityTotal} left
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Closes{" "}
-                    {new Date(listing.closeAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    Closes <LocalTime date={listing.closeAt} />
                     {" · "}
                     <span className={`font-medium ${listing.status === "active" ? "text-green-600" : "text-gray-400"}`}>
                       {STATUS_LABEL[listing.status]}
