@@ -12,6 +12,7 @@
     "test:coverage": "npx vitest run --coverage"
   },
   "dependencies": {
+    "@getbrevo/brevo": "^5.0.4",
     "@neondatabase/serverless": "^1.1.0",
     "@radix-ui/react-avatar": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.16",
