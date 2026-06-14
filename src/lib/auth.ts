@@ -20,7 +20,7 @@ export const auth = betterAuth({
       async sendVerificationOTP({ email, otp, type }) {
         if (resend) {
           await resend.emails.send({
-            from: "LastBite <noreply@lastbite.app>",
+            from: process.env.RESEND_FROM ?? "LastBite <onboarding@resend.dev>",
             to: email,
             subject: `Your LastBite code: ${otp}`,
             html: `

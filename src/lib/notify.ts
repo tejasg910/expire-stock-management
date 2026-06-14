@@ -38,7 +38,7 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
     return;
   }
   await resend.emails.send({
-    from: "LastBite <noreply@lastbite.app>",
+    from: process.env.RESEND_FROM ?? "LastBite <onboarding@resend.dev>",
     to,
     subject,
     html,
