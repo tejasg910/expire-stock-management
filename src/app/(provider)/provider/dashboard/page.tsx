@@ -3,18 +3,20 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { listings, providers, reservations } from "@/db/schema";
+import { user } from "@/db/auth-schema";
 import { member } from "@/db/auth-schema";
 import { eq, desc, count } from "drizzle-orm";
 import { ProviderDashboard } from "@/components/provider-dashboard";
 import { ProviderNav } from "@/components/provider-nav";
 import { Pagination } from "@/components/ui/pagination";
 
-const PAGE_SIZE = 10;
+const LISTINGS_PAGE_SIZE = 10;
+const PICKUPS_PAGE_SIZE = 5;
 
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; pickupsPage?: string }>;
 }) {
   const hdrs = await headers();
   const session = await auth.api.getSession({ headers: hdrs });
@@ -43,32 +45,54 @@ export default async function DashboardPage({
 
   if (!provider) redirect("/provider/onboard");
 
-  const { page: pageParam } = await searchParams;
+  const { page: pageParam, pickupsPage: pickupsPageParam } = await searchParams;
   const page = Math.max(1, parseInt(pageParam ?? "1") || 1);
-  const offset = (page - 1) * PAGE_SIZE;
+  const pickupsPage = Math.max(1, parseInt(pickupsPageParam ?? "1") || 1);
 
-  const [providerListings, [{ total }], activeReservations] = await Promise.all([
+  // Run in two batches to avoid exhausting Neon free-tier connection pool.
+  const [providerListings, [{ totalListings }]] = await Promise.all([
     db.query.listings.findMany({
       where: eq(listings.providerId, provider.id),
       orderBy: [desc(listings.createdAt)],
-      limit: PAGE_SIZE,
-      offset,
+      limit: LISTINGS_PAGE_SIZE,
+      offset: (page - 1) * LISTINGS_PAGE_SIZE,
     }),
+    db.select({ totalListings: count() })
+      .from(listings)
+      .where(eq(listings.providerId, provider.id)),
+  ]);
+
+  const [heldReservations, [{ totalPickups }], completedReservations] = await Promise.all([
+    db
+      .select({
+        reservation: reservations,
+        listing: listings,
+        customerEmail: user.email,
+        customerName: user.name,
+      })
+      .from(reservations)
+      .innerJoin(listings, eq(reservations.listingId, listings.id))
+      .innerJoin(user, eq(reservations.userId, user.id))
+      .where(eq(listings.providerId, provider.id))
+      .orderBy(desc(reservations.createdAt))
+      .limit(PICKUPS_PAGE_SIZE)
+      .offset((pickupsPage - 1) * PICKUPS_PAGE_SIZE),
 
     db
-      .select({ total: count() })
-      .from(listings)
+      .select({ totalPickups: count() })
+      .from(reservations)
+      .innerJoin(listings, eq(reservations.listingId, listings.id))
       .where(eq(listings.providerId, provider.id)),
 
     db
       .select({ reservation: reservations, listing: listings })
       .from(reservations)
       .innerJoin(listings, eq(reservations.listingId, listings.id))
-      .where(eq(listings.providerId, provider.id))
-      .orderBy(desc(reservations.createdAt)),
+      .where(eq(listings.providerId, provider.id)),
   ]);
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const listingsTotalPages = Math.ceil(totalListings / LISTINGS_PAGE_SIZE);
+  const pickupsTotalPages = Math.ceil(totalPickups / PICKUPS_PAGE_SIZE);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -77,9 +101,25 @@ export default async function DashboardPage({
         <ProviderDashboard
           provider={provider}
           listings={providerListings}
-          reservations={activeReservations}
+          reservations={heldReservations}
+          completedReservations={completedReservations}
+          pickupsPagination={
+            <Pagination
+              page={pickupsPage}
+              totalPages={pickupsTotalPages}
+              baseUrl="/provider/dashboard"
+              paramName="pickupsPage"
+            />
+          }
+          listingsPagination={
+            <Pagination
+              page={page}
+              totalPages={listingsTotalPages}
+              baseUrl="/provider/dashboard"
+              paramName="page"
+            />
+          }
         />
-        <Pagination page={page} totalPages={totalPages} baseUrl="/provider/dashboard" />
       </main>
     </div>
   );
