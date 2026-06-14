@@ -155,11 +155,28 @@ export async function cancelReservation(_prev: unknown, formData: FormData) {
 
   if (!reservation) return { error: "Reservation not found" };
 
-  await inngest.send({
-    name: "reservation/cancelled",
-    data: { reservationId },
+  // Update DB directly — release stock + mark cancelled atomically.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(reservations)
+      .set({ status: "cancelled" })
+      .where(eq(reservations.id, reservationId));
+    await tx
+      .update(listings)
+      .set({
+        quantityAvailable: sql`${listings.quantityAvailable} + ${reservation.quantity}`,
+        status: "active",
+      })
+      .where(eq(listings.id, reservation.listingId));
   });
 
+  try {
+    await inngest.send({ name: "reservation/cancelled", data: { reservationId } });
+  } catch (e) {
+    console.error("[inngest] send failed", e);
+  }
+
   revalidatePath("/my-pickups");
+  revalidatePath("/");
   return { success: true };
 }
