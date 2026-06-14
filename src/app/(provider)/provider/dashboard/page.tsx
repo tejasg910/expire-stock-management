@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { listings, providers, reservations } from "@/db/schema";
 import { user } from "@/db/auth-schema";
 import { member } from "@/db/auth-schema";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, desc, count, and } from "drizzle-orm";
 import { ProviderDashboard } from "@/components/provider-dashboard";
 import { ProviderNav } from "@/components/provider-nav";
 import { Pagination } from "@/components/ui/pagination";
@@ -73,7 +73,7 @@ export default async function DashboardPage({
       .from(reservations)
       .innerJoin(listings, eq(reservations.listingId, listings.id))
       .innerJoin(user, eq(reservations.userId, user.id))
-      .where(eq(listings.providerId, provider.id))
+      .where(and(eq(listings.providerId, provider.id), eq(reservations.status, "held")))
       .orderBy(desc(reservations.createdAt))
       .limit(PICKUPS_PAGE_SIZE)
       .offset((pickupsPage - 1) * PICKUPS_PAGE_SIZE),
@@ -82,7 +82,7 @@ export default async function DashboardPage({
       .select({ totalPickups: count() })
       .from(reservations)
       .innerJoin(listings, eq(reservations.listingId, listings.id))
-      .where(eq(listings.providerId, provider.id)),
+      .where(and(eq(listings.providerId, provider.id), eq(reservations.status, "held"))),
 
     db
       .select({ reservation: reservations, listing: listings })
