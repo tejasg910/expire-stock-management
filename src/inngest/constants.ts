@@ -1,0 +1,1 @@
+export const GLOBAL_MAX_PICKUP_MINUTES = 30;
