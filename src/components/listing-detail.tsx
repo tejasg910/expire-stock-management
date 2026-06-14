@@ -72,7 +72,8 @@ export function ListingDetail({ listing, provider, isFollowing = false }: Props)
     if (error) { setAuthError(error.message ?? "Invalid code"); return; }
     setJustAuthed(true);
     setAuthStep("idle");
-    router.refresh();
+    // Hard reload ensures session cookie is flushed into the next server action request.
+    window.location.reload();
   }
 
   const current = Number(live.currentPrice);
@@ -248,7 +249,7 @@ export function ListingDetail({ listing, provider, isFollowing = false }: Props)
           </div>
         ) : (
           <>
-            {claimState?.error && (
+            {claimState?.error && claimState.error !== "auth_required" && (
               <p className="text-sm text-red-500 mb-3 bg-red-50 px-3 py-2 rounded-lg">{claimState.error}</p>
             )}
             <form action={claimAction}>
